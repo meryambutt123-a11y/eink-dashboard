@@ -1,0 +1,22 @@
+{
+  "name": "e-ink Weather Dashboard",
+  "short_name": "eink-dash",
+  "description": "A personal e-ink styled weather and events dashboard",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#75766d",
+  "theme_color": "#75766d",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

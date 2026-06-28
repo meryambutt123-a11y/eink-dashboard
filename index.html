@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>e-ink dash</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#75766d">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root{
+    --paper:#75766d;
+    --ink:#101010;
+    --ink-soft:#2c2c28;
+    --line:#101010;
+    --line-soft:#54554d;
+    --panel:#68695f;
+    --highlight:#101010;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Space Grotesk',sans-serif;
+    height:100%;
+    overflow-x:hidden;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    pointer-events:none;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.025) 0px, rgba(0,0,0,0.025) 1px, transparent 1px, transparent 3px);
+    z-index:50;
+    mix-blend-mode:multiply;
+  }
+  .device{
+    max-width:760px;
+    margin:0 auto;
+    padding:18px;
+    min-height:100vh;
+  }
+  .frame{
+    border:3px solid var(--line);
+    background:var(--paper);
+    position:relative;
+  }
+  .flicker{
+    animation:flicker 0.4s steps(2) 1;
+  }
+  @keyframes flicker{
+    0%{ filter:invert(1); }
+    50%{ filter:invert(0.5); }
+    100%{ filter:invert(0); }
+  }
+  .statusbar{
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.5px;
+    padding:8px 12px;
+    border-bottom:2px solid var(--line);
+    color:var(--ink-soft);
+  }
+  .statusbar .dot{
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--ink); margin-right:5px;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:1.15fr 1.5fr 1fr;
+    grid-template-rows:auto auto auto;
+    gap:0;
+  }
+  .cell{
+    border:1px solid var(--line);
+    padding:14px;
+    position:relative;
+    min-height:0;
+  }
+  .cell-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:9.5px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    margin-bottom:8px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .cell-label::after{
+    content:"";
+    flex:1;
+    height:1px;
+    background:var(--line-soft);
+  }
+
+  /* BIG TEMP */
+  .now{ grid-column:1; grid-row:1; }
+  .now .temp{
+    font-family:'JetBrains Mono',monospace;
+    font-size:64px;
+    font-weight:700;
+    line-height:0.9;
+    letter-spacing:-2px;
+  }
+  .now .feels{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-top:6px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .now .sunrow{
+    display:flex; gap:14px;
+    margin-top:10px;
+    font-size:11px;
+    font-family:'JetBrains Mono',monospace;
+    color:var(--ink-soft);
+  }
+  .now .place{
+    margin-top:14px;
+    font-size:12px;
+    letter-spacing:0.5px;
+    border-top:1px dashed var(--line-soft);
+    padding-top:8px;
+  }
+
+  /* TODAY SUMMARY */
+  .today{ grid-column:2 / span 2; grid-row:1; }
+  .today .date{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-bottom:8px;
+  }
+  .today .headline{
+    font-size:18px;
+    font-weight:600;
+    line-height:1.35;
+    margin-bottom:10px;
+  }
+  .today .tag{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    border:1.5px solid var(--line);
+    border-radius:14px;
+    padding:4px 12px;
+    font-size:11px;
+    font-family:'JetBrains Mono',monospace;
+  }
+
+  /* FORECAST STRIP */
+  .forecast{ grid-column:1 / span 2; grid-row:2; }
+  .fdays{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    height:74px;
+    margin-top:4px;
+  }
+  .fday{
+    display:flex; flex-direction:column; align-items:center;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    gap:4px;
+    flex:1;
+  }
+  .fday .ic{ font-size:15px; }
+  .fday .hi{ font-weight:700; }
+  .fday .lo{ color:var(--ink-soft); }
+  .fday .d{
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    letter-spacing:1px;
+    margin-top:2px;
+  }
+
+  /* CITIES */
+  .cities{ grid-column:3; grid-row:2; }
+  .city{
+    display:flex; justify-content:space-between;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    padding:6px 0;
+    border-bottom:1px dashed var(--line-soft);
+  }
+  .city:last-child{ border-bottom:none; }
+  .city .ic{ margin-right:6px; }
+
+  /* STATS */
+  .stats{ grid-column:1 / span 2; grid-row:3; }
+  .stat-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:10px;
+  }
+  .stat-block{ font-family:'JetBrains Mono',monospace; font-size:11.5px; }
+  .stat-block .row{ display:flex; justify-content:space-between; padding:2px 0; }
+  .stat-block .row span:last-child{ font-weight:700; }
+  .stat-block .title{ color:var(--ink-soft); font-size:9.5px; letter-spacing:1px; margin-bottom:4px; text-transform:uppercase;}
+
+  /* CALENDAR / EVENTS */
+  .events{ grid-column:3; grid-row:3; display:flex; flex-direction:column; }
+  .event-list{ flex:1; display:flex; flex-direction:column; gap:8px; }
+  .event{
+    font-size:11.5px;
+    font-family:'JetBrains Mono',monospace;
+    border-left:2px solid var(--line);
+    padding-left:8px;
+  }
+  .event .et{ color:var(--ink-soft); font-size:10px;}
+  .event .en{ font-weight:600; }
+  .empty-note{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    font-style:italic;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .add-event{
+    margin-top:8px;
+    display:flex; gap:4px;
+  }
+  .add-event input{
+    flex:1;
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    background:transparent;
+    border:1px solid var(--line-soft);
+    padding:4px 6px;
+    color:var(--ink);
+  }
+  .add-event button{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10.5px;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    padding:4px 8px;
+    cursor:pointer;
+  }
+  .event .del{
+    cursor:pointer;
+    color:var(--ink-soft);
+    font-size:10px;
+    margin-left:6px;
+  }
+  .event.gcal{ border-left-style:solid; }
+  .cal-status{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:8px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:9.5px;
+    color:var(--ink-soft);
+  }
+  .cal-btn{
+    font-family:'JetBrains Mono',monospace;
+    font-size:9.5px;
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--ink);
+    padding:2px 7px;
+    cursor:pointer;
+    letter-spacing:0.5px;
+  }
+  .cal-btn:hover{ background:var(--ink); color:var(--paper); }
+  .cal-dot{
+    display:inline-block; width:5px; height:5px; border-radius:50%;
+    margin-right:4px;
+  }
+  .cal-dot.on{ background:var(--ink); }
+  .cal-dot.off{ background:var(--line-soft); }
+  .cal-expiry{
+    font-size:9px;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+    font-family:'JetBrains Mono',monospace;
+    display:none;
+  }
+  .cal-expiry.warn{
+    color:var(--ink);
+    font-weight:700;
+  }
+
+  .footer-bar{
+    display:flex; justify-content:space-between;
+    padding:8px 12px;
+    border-top:2px solid var(--line);
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    color:var(--ink-soft);
+  }
+  .brand{ letter-spacing:3px; text-transform:uppercase; font-weight:700; }
+
+  .loading-msg, .err-msg{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+  }
+
+  @media (max-width:640px){
+    .grid{ grid-template-columns:1fr 1fr; }
+    .now{ grid-column:1 / span 2; grid-row:1; }
+    .today{ grid-column:1 / span 2; grid-row:2; }
+    .forecast{ grid-column:1 / span 2; grid-row:3; }
+    .cities{ grid-column:1; grid-row:4; }
+    .stats{ grid-column:1 / span 2; grid-row:5; }
+    .events{ grid-column:2; grid-row:4; }
+    .now .temp{ font-size:54px; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .flicker{ animation:none; }
+  }
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="frame" id="frame">
+    <div class="statusbar">
+      <span><span class="dot"></span>LIVE</span>
+      <span id="clock">--:--</span>
+    </div>
+
+    <div class="grid" id="grid">
+
+      <div class="cell now">
+        <div class="cell-label">now</div>
+        <div class="temp" id="curTemp">--°</div>
+        <div class="feels" id="feels">feels like --°</div>
+        <div class="sunrow">
+          <span id="sunrise">↑ --:--</span>
+          <span id="sunset">↓ --:--</span>
+        </div>
+        <div class="place" id="placeName">locating...</div>
+      </div>
+
+      <div class="cell today">
+        <div class="cell-label">today</div>
+        <div class="date" id="todayDate">-- --- ----</div>
+        <div class="headline" id="headline">Loading forecast...</div>
+        <div class="tag" id="tag">⛅ —</div>
+      </div>
+
+      <div class="cell forecast">
+        <div class="cell-label">5-day</div>
+        <div class="fdays" id="fdays"></div>
+      </div>
+
+      <div class="cell cities">
+        <div class="cell-label">nearby</div>
+        <div id="cityList"><span class="loading-msg">loading...</span></div>
+      </div>
+
+      <div class="cell stats">
+        <div class="cell-label">conditions</div>
+        <div class="stat-grid">
+          <div class="stat-block">
+            <div class="title">rain</div>
+            <div class="row"><span>24h</span><span id="rain24">--</span></div>
+            <div class="row"><span>7d</span><span id="rain7">--</span></div>
+            <div class="row"><span>chance</span><span id="rainChance">--</span></div>
+          </div>
+          <div class="stat-block">
+            <div class="title">air</div>
+            <div class="row"><span>humidity</span><span id="humidity">--</span></div>
+            <div class="row"><span>wind</span><span id="wind">--</span></div>
+            <div class="row"><span>UV</span><span id="uv">--</span></div>
+          </div>
+          <div class="stat-block">
+            <div class="title">sky</div>
+            <div class="row"><span>moon</span><span id="moon">--</span></div>
+            <div class="row"><span>pressure</span><span id="pressure">--</span></div>
+            <div class="row"><span>visibility</span><span id="visibility">--</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cell events">
+        <div class="cell-label">upcoming</div>
+        <div class="cal-status">
+          <span id="calStatusText"><span class="cal-dot off"></span>not connected</span>
+          <button class="cal-btn" id="calConnectBtn">connect</button>
+        </div>
+        <div class="cal-expiry" id="calExpiry"></div>
+        <div class="event-list" id="eventList"></div>
+        <div class="add-event">
+          <input type="text" id="newEventName" placeholder="event name">
+          <button id="addEventBtn">+</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="footer-bar">
+      <span class="brand">eink·dash</span>
+      <span id="lastUpdate">updated --:--</span>
+    </div>
+  </div>
+</div>
+
+<script>
+const WMO = {
+  0:["☀️","Clear sky"],1:["🌤️","Mainly clear"],2:["⛅","Partly cloudy"],3:["☁️","Overcast"],
+  45:["🌫️","Fog"],48:["🌫️","Freezing fog"],
+  51:["🌦️","Light drizzle"],53:["🌦️","Drizzle"],55:["🌧️","Dense drizzle"],
+  56:["🌧️","Freezing drizzle"],57:["🌧️","Freezing drizzle"],
+  61:["🌧️","Light rain"],63:["🌧️","Rain"],65:["🌧️","Heavy rain"],
+  66:["🌧️","Freezing rain"],67:["🌧️","Freezing rain"],
+  71:["🌨️","Light snow"],73:["🌨️","Snow"],75:["❄️","Heavy snow"],77:["❄️","Snow grains"],
+  80:["🌦️","Light showers"],81:["🌧️","Showers"],82:["⛈️","Violent showers"],
+  85:["🌨️","Snow showers"],86:["❄️","Snow showers"],
+  95:["⛈️","Thunderstorm"],96:["⛈️","Storm w/ hail"],99:["⛈️","Severe storm"]
+};
+
+function wmo(code){ return WMO[code] || ["⛅","—"]; }
+
+function fmtTime(iso){
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+function fmtDay(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString([], {weekday:'short'}).toUpperCase();
+}
+
+function moonPhaseName(date){
+  const lp = 2551443;
+  const newMoon = new Date(2000,0,6,18,14,0).getTime()/1000;
+  const phase = ((date.getTime()/1000 - newMoon) % lp) / lp;
+  const idx = Math.floor(phase*8 + 0.5) % 8;
+  const names = ["New Moon","Waxing Crescent","First Quarter","Waxing Gibbous","Full Moon","Waning Gibbous","Last Quarter","Waning Crescent"];
+  const icons = ["🌑","🌒","🌓","🌔","🌕","🌖","🌗","🌘"];
+  return icons[idx] + " " + names[idx];
+}
+
+function flickerFrame(){
+  const f = document.getElementById('frame');
+  f.classList.remove('flicker');
+  void f.offsetWidth;
+  f.classList.add('flicker');
+}
+
+function setClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+setClock();
+setInterval(setClock, 30000);
+
+async function reverseGeocode(lat, lon){
+  try{
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`);
+    const j = await r.json();
+    const a = j.address || {};
+    return a.city || a.town || a.village || a.county || j.display_name?.split(',')[0] || "your location";
+  }catch(e){ return "your location"; }
+}
+
+async function searchCity(lat, lon, name, radiusKm){
+  // find nearby cities via Open-Meteo geocoding around a bounding offset
+  try{
+    const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1`);
+    return null;
+  }catch(e){ return null; }
+}
+
+async function getWeather(lat, lon){
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,surface_pressure,visibility,uv_index` +
+    `&hourly=precipitation_probability,uv_index` +
+    `&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset,precipitation_sum,precipitation_probability_max,uv_index_max` +
+    `&past_days=7&timezone=auto`;
+  const r = await fetch(url);
+  return r.json();
+}
+
+async function getNearbyCities(lat, lon){
+  // Use Open-Meteo geocoding reverse-ish trick: query a few offset points
+  const offsets = [
+    {dlat: 0.5, dlon: 0.5},
+    {dlat: -0.5, dlon: 0.3},
+    {dlat: 0.3, dlon: -0.6}
+  ];
+  const results = [];
+  for(const off of offsets){
+    try{
+      const plat = lat + off.dlat, plon = lon + off.dlon;
+      const name = await reverseGeocode(plat, plon);
+      const w = await getWeather(plat, plon);
+      results.push({name, temp: Math.round(w.current.temperature_2m), code: w.current.weather_code});
+    }catch(e){}
+  }
+  return results;
+}
+
+// ---- Google Calendar integration ----
+const GOOGLE_CLIENT_ID = '331462107880-ntarird3ho9e4mg06njue3t83hahppkq.apps.googleusercontent.com';
+const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+let gcalTokenClient = null;
+let gcalEvents = []; // cached fetched events, refreshed on connect / token refresh
+
+function getStoredToken(){
+  const raw = localStorage.getItem('eink_gcal_token');
+  if(!raw) return null;
+  try{
+    const obj = JSON.parse(raw);
+    if(obj.expires_at && Date.now() < obj.expires_at) return obj.access_token;
+    return null;
+  }catch(e){ return null; }
+}
+
+function storeToken(tokenResponse){
+  const expires_at = Date.now() + (tokenResponse.expires_in * 1000) - 60000; // 1min safety margin
+  localStorage.setItem('eink_gcal_token', JSON.stringify({
+    access_token: tokenResponse.access_token,
+    expires_at
+  }));
+}
+
+function clearToken(){
+  localStorage.removeItem('eink_gcal_token');
+}
+
+function setCalStatus(connected){
+  const el = document.getElementById('calStatusText');
+  const btn = document.getElementById('calConnectBtn');
+  if(connected){
+    el.innerHTML = '<span class="cal-dot on"></span>connected';
+    btn.textContent = 'sync';
+  }else{
+    el.innerHTML = '<span class="cal-dot off"></span>not connected';
+    btn.textContent = 'connect';
+  }
+  updateExpiryBadge();
+}
+
+function updateExpiryBadge(){
+  const badge = document.getElementById('calExpiry');
+  const raw = localStorage.getItem('eink_gcal_token');
+  if(!raw){
+    badge.style.display = 'none';
+    return;
+  }
+  let obj;
+  try{ obj = JSON.parse(raw); }catch(e){ badge.style.display = 'none'; return; }
+  const msLeft = obj.expires_at - Date.now();
+  if(msLeft <= 0){
+    badge.style.display = 'none';
+    return;
+  }
+  const minsLeft = Math.round(msLeft / 60000);
+  const hoursLeft = Math.floor(minsLeft / 60);
+  const daysLeft = Math.floor(hoursLeft / 24);
+
+  let text;
+  if(daysLeft >= 1){
+    text = `session expires in ${daysLeft}d ${hoursLeft % 24}h`;
+  }else if(hoursLeft >= 1){
+    text = `session expires in ${hoursLeft}h ${minsLeft % 60}m`;
+  }else{
+    text = `session expires in ${minsLeft}m`;
+  }
+
+  badge.textContent = text;
+  badge.style.display = 'block';
+  // warn (bold) under 1 hour remaining
+  badge.classList.toggle('warn', msLeft < 60*60*1000);
+}
+
+setInterval(updateExpiryBadge, 60000); // refresh badge every minute
+
+function initGoogleAuth(){
+  if(typeof google === 'undefined' || !google.accounts){
+    // GIS script not loaded yet, retry shortly
+    setTimeout(initGoogleAuth, 300);
+    return;
+  }
+  gcalTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: GCAL_SCOPE,
+    callback: (resp) => {
+      if(resp.error){
+        console.error('OAuth error', resp);
+        setCalStatus(false);
+        return;
+      }
+      storeToken(resp);
+      setCalStatus(true);
+      fetchGoogleCalendarEvents();
+    }
+  });
+
+  const existing = getStoredToken();
+  if(existing){
+    setCalStatus(true);
+    fetchGoogleCalendarEvents();
+  }
+}
+
+async function fetchGoogleCalendarEvents(){
+  const token = getStoredToken();
+  if(!token){ setCalStatus(false); return; }
+
+  try{
+    const timeMin = new Date(new Date().toDateString()).toISOString();
+    const timeMax = new Date(Date.now() + 14*86400000).toISOString();
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?` +
+      `timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}` +
+      `&singleEvents=true&orderBy=startTime&maxResults=10`;
+    const r = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` }});
+    if(r.status === 401){
+      // token expired/revoked
+      clearToken();
+      setCalStatus(false);
+      gcalEvents = [];
+      renderEvents();
+      return;
+    }
+    const data = await r.json();
+    gcalEvents = (data.items || []).map(ev => ({
+      name: ev.summary || '(untitled)',
+      date: ev.start?.dateTime || ev.start?.date,
+      allDay: !ev.start?.dateTime,
+      source: 'gcal'
+    }));
+    renderEvents();
+  }catch(e){
+    console.error('Calendar fetch failed', e);
+  }
+}
+
+document.getElementById('calConnectBtn').addEventListener('click', () => {
+  if(!gcalTokenClient){ return; }
+  const existing = getStoredToken();
+  if(existing){
+    fetchGoogleCalendarEvents(); // act as manual "sync" once connected
+  }else{
+    gcalTokenClient.requestAccessToken({ prompt: 'consent' });
+  }
+});
+
+// ---- Event rendering (merges Google Calendar + local manual events) ----
+function renderEvents(){
+  const list = document.getElementById('eventList');
+  let localEvents = JSON.parse(localStorage.getItem('eink_events') || '[]');
+  localEvents = localEvents.filter(e => new Date(e.date) >= new Date(new Date().toDateString()));
+  localEvents.sort((a,b) => new Date(a.date) - new Date(b.date));
+  localStorage.setItem('eink_events', JSON.stringify(localEvents));
+
+  // merge: gcal events first (read-only, can't delete locally), then manual ones
+  const merged = [
+    ...gcalEvents.map(e => ({...e, source:'gcal'})),
+    ...localEvents.map((e, i) => ({...e, source:'local', localIdx:i}))
+  ].sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  list.innerHTML = '';
+  if(merged.length === 0){
+    list.innerHTML = '<div class="empty-note">No upcoming events</div>';
+    return;
+  }
+  merged.slice(0,5).forEach((e) => {
+    const d = new Date(e.date);
+    const div = document.createElement('div');
+    div.className = e.source === 'gcal' ? 'event gcal' : 'event';
+    const delHtml = e.source === 'local'
+      ? `<span class="del" data-i="${e.localIdx}">✕</span>`
+      : '';
+    const whenStr = e.allDay
+      ? d.toLocaleDateString([], {month:'short', day:'numeric'})
+      : d.toLocaleDateString([], {month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    div.innerHTML = `<div class="en">${e.name}${delHtml}</div>
+                      <div class="et">${whenStr}${e.source==='gcal' ? ' · gcal' : ''}</div>`;
+    list.appendChild(div);
+  });
+  list.querySelectorAll('.del').forEach(el => {
+    el.addEventListener('click', (ev) => {
+      const i = parseInt(ev.target.dataset.i);
+      let evs = JSON.parse(localStorage.getItem('eink_events') || '[]');
+      evs.sort((a,b) => new Date(a.date) - new Date(b.date));
+      evs.splice(i,1);
+      localStorage.setItem('eink_events', JSON.stringify(evs));
+      renderEvents();
+    });
+  });
+}
+
+document.getElementById('addEventBtn').addEventListener('click', () => {
+  const input = document.getElementById('newEventName');
+  const name = input.value.trim();
+  if(!name) return;
+  const events = JSON.parse(localStorage.getItem('eink_events') || '[]');
+  events.push({name, date: new Date(Date.now() + 86400000).toISOString()});
+  localStorage.setItem('eink_events', JSON.stringify(events));
+  input.value = '';
+  renderEvents();
+});
+document.getElementById('newEventName').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') document.getElementById('addEventBtn').click();
+});
+
+async function buildDashboard(lat, lon){
+  try{
+    const [data, placeName] = await Promise.all([
+      getWeather(lat, lon),
+      reverseGeocode(lat, lon)
+    ]);
+
+    document.getElementById('placeName').textContent = placeName;
+
+    const cur = data.current;
+    const daily = data.daily;
+    const todayIdx = daily.time.findIndex(t => t === new Date().toISOString().split('T')[0]);
+    const ti = todayIdx >= 0 ? todayIdx : 7;
+
+    document.getElementById('curTemp').textContent = Math.round(cur.temperature_2m) + '°';
+    document.getElementById('feels').textContent = `feels like ${Math.round(cur.apparent_temperature)}°`;
+    document.getElementById('sunrise').textContent = '↑ ' + fmtTime(daily.sunrise[ti]);
+    document.getElementById('sunset').textContent = '↓ ' + fmtTime(daily.sunset[ti]);
+
+    const todayCode = wmo(daily.weather_code[ti]);
+    const hi = Math.round(daily.temperature_2m_max[ti]);
+    const lo = Math.round(daily.temperature_2m_min[ti]);
+    const now = new Date();
+    document.getElementById('todayDate').textContent =
+      now.toLocaleDateString([], {weekday:'long', month:'short', day:'numeric', year:'numeric'});
+    document.getElementById('headline').textContent =
+      `${todayCode[1]}. High ${hi}°, low ${lo}°.`;
+    document.getElementById('tag').textContent = `${todayCode[0]} ${todayCode[1]}`;
+
+    // forecast strip — next 5 days including today
+    const fdays = document.getElementById('fdays');
+    fdays.innerHTML = '';
+    for(let i = ti; i < Math.min(ti+5, daily.time.length); i++){
+      const c = wmo(daily.weather_code[i]);
+      const div = document.createElement('div');
+      div.className = 'fday';
+      div.innerHTML = `
+        <div class="d">${i===ti ? 'TODAY' : fmtDay(daily.time[i])}</div>
+        <div class="ic">${c[0]}</div>
+        <div class="hi">${Math.round(daily.temperature_2m_max[i])}°</div>
+        <div class="lo">${Math.round(daily.temperature_2m_min[i])}°</div>`;
+      fdays.appendChild(div);
+    }
+
+    // stats
+    const rain24 = daily.precipitation_sum[ti] ?? 0;
+    let rain7 = 0;
+    for(let i = Math.max(0,ti-7); i < ti; i++) rain7 += (daily.precipitation_sum[i] || 0);
+    document.getElementById('rain24').textContent = rain24.toFixed(2) + 'mm';
+    document.getElementById('rain7').textContent = rain7.toFixed(2) + 'mm';
+    document.getElementById('rainChance').textContent = (daily.precipitation_probability_max[ti] ?? 0) + '%';
+
+    document.getElementById('humidity').textContent = Math.round(cur.relative_humidity_2m) + '%';
+    document.getElementById('wind').textContent = Math.round(cur.wind_speed_10m) + 'km/h';
+    document.getElementById('uv').textContent = (daily.uv_index_max[ti] ?? cur.uv_index ?? 0).toFixed(1);
+
+    document.getElementById('moon').textContent = moonPhaseName(now);
+    document.getElementById('pressure').textContent = Math.round(cur.surface_pressure) + 'hPa';
+    document.getElementById('visibility').textContent = (cur.visibility/1000).toFixed(1) + 'km';
+
+    document.getElementById('lastUpdate').textContent =
+      'updated ' + now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+
+    // nearby cities (best-effort, non-blocking feel)
+    getNearbyCities(lat, lon).then(cities => {
+      const el = document.getElementById('cityList');
+      if(cities.length === 0){
+        el.innerHTML = '<span class="empty-note">unavailable</span>';
+        return;
+      }
+      el.innerHTML = '';
+      cities.forEach(c => {
+        const ic = wmo(c.code)[0];
+        const row = document.createElement('div');
+        row.className = 'city';
+        row.innerHTML = `<span>${c.name}</span><span><span class="ic">${ic}</span>${c.temp}°</span>`;
+        el.appendChild(row);
+      });
+    });
+
+    flickerFrame();
+  }catch(e){
+    document.getElementById('headline').textContent = 'Could not load weather. Check connection.';
+    console.error(e);
+  }
+}
+
+function initLocation(){
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(
+      pos => buildDashboard(pos.coords.latitude, pos.coords.longitude),
+      err => {
+        document.getElementById('placeName').textContent = 'location denied — using default';
+        buildDashboard(31.349, 72.6837); // fallback: Gojra, Punjab, PK
+      },
+      {timeout: 8000}
+    );
+  }else{
+    buildDashboard(31.349, 72.6837);
+  }
+}
+
+renderEvents();
+initLocation();
+initGoogleAuth();
+setInterval(() => {
+  navigator.geolocation ?
+    navigator.geolocation.getCurrentPosition(
+      pos => buildDashboard(pos.coords.latitude, pos.coords.longitude),
+      () => buildDashboard(31.349, 72.6837)
+    ) : buildDashboard(31.349, 72.6837);
+}, 15 * 60 * 1000); // refresh every 15 min
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
